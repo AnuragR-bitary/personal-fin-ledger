@@ -1,0 +1,84 @@
+# Debt Tracker System Architecture
+
+## Purpose
+A personal application to track money owed by friends when the owner pays for shared expenses.
+
+Example:
+- Owner pays for dinner
+- Friends owe their share
+- Friends later repay the owner
+
+The system records expenses and payments and dynamically calculates balances.
+
+---
+
+# Technology Stack
+
+Frontend
+React
+
+Backend
+AWS Lambda (Node.js)
+
+API Layer
+API Gateway
+
+Database
+PostgreSQL
+
+Infrastructure
+Serverless Framework
+
+Local Development
+Docker + LocalStack + PostgreSQL
+
+---
+
+# High-Level Architecture
+
+React Frontend
+    |
+    |
+API Gateway
+    |
+    |
+Lambda Functions (Node.js)
+    |
+    |
+PostgreSQL Database
+
+---
+
+# Core Principles
+
+1. Store **events**, not derived values
+2. Calculate balances dynamically
+3. Preserve historical records
+4. Avoid redundant state
+
+The system stores:
+
+Expenses → who paid  
+Participants → who owes  
+Payments → who repaid
+
+Balances are calculated from these events.
+
+---
+
+# Example Flow
+
+Owner pays ₹900 for dinner with Rahul and Aman.
+
+Expense created:
+₹900 dinner
+
+Participants:
+Rahul owes ₹450
+Aman owes ₹450
+
+Later Rahul pays ₹200.
+
+Remaining balance:
+Rahul owes ₹250
+Aman owes ₹450
