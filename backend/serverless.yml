@@ -1,0 +1,57 @@
+service: personal-fin-ledger-backend
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  environment:
+    DB_HOST: ${env:DB_HOST, 'localhost'}
+    DB_PORT: ${env:DB_PORT, '5432'}
+    DB_USER: ${env:DB_USER, 'postgres'}
+    DB_PASSWORD: ${env:DB_PASSWORD, 'postgres'}
+    DB_NAME: ${env:DB_NAME, 'personal-fin-ledger'}
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline
+
+functions:
+  createDebt:
+    handler: src/handlers/create-debt.handler
+    events:
+      - http:
+          path: debts
+          method: post
+          cors: true
+
+  listDebts:
+    handler: src/handlers/list-debts.handler
+    events:
+      - http:
+          path: debts
+          method: get
+          cors: true
+
+  createFriend:
+    handler: src/handlers/create-friend.handler
+    events:
+      - http:
+          path: friends
+          method: post
+          cors: true
+
+  listFriends:
+    handler: src/handlers/list-friends.handler
+    events:
+      - http:
+          path: friends
+          method: get
+          cors: true
+
+  recordRepayment:
+    handler: src/handlers/record-repayment.handler
+    events:
+      - http:
+          path: repayments
+          method: post
+          cors: true

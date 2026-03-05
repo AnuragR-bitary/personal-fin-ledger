@@ -13,5 +13,5 @@ Establish a reproducible local development environment using Docker and Docker C
 2. **Create Docker Compose Configuration:**
    - Create a `docker-compose.yml` file in the root `personal-fin-ledger/` directory.
    - **Service 1: Backend:** Build from the `backend/Dockerfile`, map ports (e.g., 3000:3000), and link a `.env` file for environment variables. Mount volumes for hot-reloading if desired.
-   - **Service 2: Database:** Define a PostgreSQL container (`postgres:15-alpine` or similar). Set environment variables for the database name, user, and password (e.g., `debt_tracker_db`). Map default PostgreSQL port (5432:5432).
+   - **Service 2: Database:** Define a PostgreSQL container (`postgres:15-alpine` or similar). Set environment variables for the database name, user, and password (e.g., `debt_tracker_db`). Map default PostgreSQL port (5433:5433).
 3. **Environment Setup:** Ensure the backend `db.js` is configured to pick up the database host from the docker-compose network (e.g., `host: 'database'`).
