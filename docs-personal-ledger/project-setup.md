@@ -73,7 +73,7 @@ Step 7
 
 Create database connection pool
 
-services/db.js
+services/db.ts
 
 ---
 

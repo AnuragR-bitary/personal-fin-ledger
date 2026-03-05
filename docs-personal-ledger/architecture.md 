@@ -18,7 +18,7 @@ Frontend
 React
 
 Backend
-AWS Lambda (Node.js)
+AWS Lambda (Node.js / TypeScript)
 
 API Layer
 API Gateway
@@ -42,7 +42,7 @@ React Frontend
 API Gateway
     |
     |
-Lambda Functions (Node.js)
+Lambda Functions (Node.js / TypeScript)
     |
     |
 PostgreSQL Database

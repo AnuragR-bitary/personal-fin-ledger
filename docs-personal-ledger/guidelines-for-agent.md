@@ -16,7 +16,7 @@ You must follow their architecture and constraints when generating code.
 
 Engineering Standards
 
-Follow production-quality engineering practices for Node.js backend and React frontend.
+Follow production-quality engineering practices for Node.js (TypeScript) backend and React frontend.
 
 Adhere to the following principles:
 
@@ -42,7 +42,7 @@ Frontend:
 - Components = reusable UI elements
 - Services = API communication layer
 
-4. Production-Friendly Node.js Practices
+4. Production-Friendly Node.js (TypeScript) Practices
 - Avoid monolithic files
 - Use environment configuration via .env
 - Use async/await consistently

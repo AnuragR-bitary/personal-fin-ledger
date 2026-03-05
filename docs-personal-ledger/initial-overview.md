@@ -33,23 +33,23 @@ Inside backend/ create a serverless project.
 backend/
   src/
     handlers/
-      createDebt.js
-      listDebts.js
-      createFriend.js
-      listFriends.js
-      recordRepayment.js
+      createDebt.ts
+      listDebts.ts
+      createFriend.ts
+      listFriends.ts
+      recordRepayment.ts
     services/
-      debtService.js
-      friendService.js
-      repaymentService.js
+      debtService.ts
+      friendService.ts
+      repaymentService.ts
     models/
-      debt.model.js
-      friend.model.js
-      repayment.model.js
+      debt.model.ts
+      friend.model.ts
+      repayment.model.ts
     utils/
-      response.js
+      response.ts
     config/
-      db.js
+      db.ts
 
   serverless.yml
   package.json
@@ -105,22 +105,22 @@ Inside frontend/ create a React + Vite project.
 frontend/
   src/
     components/
-      DebtList.jsx
-      AddDebtForm.jsx
-      FriendList.jsx
-      RepaymentForm.jsx
+      DebtList.tsx
+      AddDebtForm.tsx
+      FriendList.tsx
+      RepaymentForm.tsx
     pages/
-      Dashboard.jsx
+      Dashboard.tsx
     services/
-      api.js
-    App.jsx
-    main.jsx
+      api.ts
+    App.tsx
+    main.tsx
 
-  vite.config.js
+  vite.config.ts
   package.json
   README.md
 
-api.js should contain functions to call the backend endpoints.
+api.ts should contain functions to call the backend endpoints.
 
 --------------------------------------------------
 
