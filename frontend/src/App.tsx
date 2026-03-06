@@ -1,22 +1,26 @@
 import { Routes, Route } from 'react-router-dom';
-import Dashboard from './pages/Dashboard.tsx';
+import PageLayout from './components/layout/PageLayout';
+import Dashboard from './pages/Dashboard';
+import FriendsPage from './pages/Friends';
+import ExpensesPage from './pages/Expenses';
+import TransactionsPage from './pages/Transactions';
+import DebtsPage from './pages/Debts';
+import ReportsPage from './pages/Reports';
+import SettingsPage from './pages/SettingsPage';
 
 function App() {
   return (
-    <div className="container">
-      <header className="mb-8">
-        <h1 className="text-2xl flex items-center gap-2">
-          <span>💸</span> Personal Finance Ledger
-        </h1>
-        <p className="text-secondary">Keep track of your shared expenses and debts.</p>
-      </header>
-
-      <main>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-        </Routes>
-      </main>
-    </div>
+    <PageLayout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/friends" element={<FriendsPage />} />
+        <Route path="/expenses" element={<ExpensesPage />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/debts" element={<DebtsPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Routes>
+    </PageLayout>
   );
 }
 
