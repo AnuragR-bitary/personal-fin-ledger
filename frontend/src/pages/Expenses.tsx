@@ -5,52 +5,100 @@ import SearchInput from '../components/ui/SearchInput';
 import Modal from '../components/ui/Modal';
 import Table from '../components/ui/Table';
 import { Button, Input, Select } from '../components/ui/FormElements';
-import { getExpenses, getFriends, createExpense, deleteExpense } from '../services/api';
-import type { Expense, Friend } from '../types';
+import { getExpenses, createExpense, deleteExpense } from '../services/expense.service';
+import { getFriends, getMe } from '../services/friend.service';
+import type { Expense, Friend, CreateExpenseInput } from '../types';
 
 // ─── Add Expense Modal ────────────────────────────────────────────────────────
 
-function AddExpenseModal({ isOpen, onClose, friends, onSuccess }: {
+function AddExpenseModal({ isOpen, onClose, owner, friends, onSuccess }: {
     isOpen: boolean;
     onClose: () => void;
-    friends: Friend[];
+    owner: Friend | null;
+    friends: Friend[];          // non-owner friends only
     onSuccess: () => void;
 }) {
+    const everyone = useMemo(() => {
+        // Owner always appears first, labelled "Me"
+        const all: { id: string; label: string }[] = [];
+        if (owner) all.push({ id: owner.id, label: 'Me' });
+        friends.forEach((f) => all.push({ id: f.id, label: f.name }));
+        return all;
+    }, [owner, friends]);
+
     const [form, setForm] = useState({
         description: '',
         amount: '',
-        paidById: '',
+        paidById: owner?.id ?? '',
         participants: [] as string[],
         splitType: 'EQUAL' as 'EQUAL' | 'CUSTOM',
         date: new Date().toISOString().split('T')[0],
     });
+
+    // Custom split amounts keyed by userId
+    const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(false);
+
+    // Every time the modal opens, default paidById to the owner
+    useEffect(() => {
+        if (isOpen && owner) {
+            setForm((p) => ({ ...p, paidById: p.paidById || owner.id }));
+        }
+        if (!isOpen) {
+            // Full reset on close
+            setForm({ description: '', amount: '', paidById: owner?.id ?? '', participants: [], splitType: 'EQUAL', date: new Date().toISOString().split('T')[0] });
+            setCustomAmounts({});
+        }
+    }, [isOpen, owner]);
 
     const set = (k: string, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
 
     const toggleParticipant = (id: string) => {
-        set('participants', form.participants.includes(id)
+        const next = form.participants.includes(id)
             ? form.participants.filter((p) => p !== id)
-            : [...form.participants, id]
-        );
+            : [...form.participants, id];
+        set('participants', next);
+        // Remove custom amount if participant removed
+        if (form.participants.includes(id)) {
+            setCustomAmounts((prev) => { const c = { ...prev }; delete c[id]; return c; });
+        }
     };
+
+    const totalAmount = parseFloat(form.amount) || 0;
+    // For equal split: total / (selected friends + payer)
+    const perPerson = form.participants.length > 0
+        ? (totalAmount / (form.participants.length + 1)).toFixed(2)
+        : '0.00';
+
+    // Validation: custom amounts must not exceed total and all fields must be filled
+    const customTotal = Object.values(customAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+    const allCustomFilled = form.splitType !== 'CUSTOM' || form.participants.every((uid) => parseFloat(customAmounts[uid]) > 0);
+    const customValid = form.splitType !== 'CUSTOM' || (allCustomFilled && customTotal <= totalAmount + 0.01);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.description || !form.amount || !form.paidById || form.participants.length === 0) return;
+        if (!customValid) return;
         setLoading(true);
         try {
-            await createExpense({
+            const participants = form.participants.map((userId) => ({
+                userId,
+                owedAmount: form.splitType === 'CUSTOM' ? parseFloat(customAmounts[userId] || '0') : undefined,
+            }));
+            const input: CreateExpenseInput = {
                 description: form.description,
-                amount: parseFloat(form.amount),
-                paidById: form.paidById,
-                participants: form.participants,
+                amount: totalAmount,
+                paidByUserId: form.paidById,
+                expenseDate: form.date,
                 splitType: form.splitType,
-                date: form.date,
-            });
+                participants,
+            };
+            await createExpense(input);
             onSuccess();
             onClose();
-            setForm({ description: '', amount: '', paidById: '', participants: [], splitType: 'EQUAL', date: new Date().toISOString().split('T')[0] });
+            // Reset
+            setForm({ description: '', amount: '', paidById: owner?.id ?? '', participants: [], splitType: 'EQUAL', date: new Date().toISOString().split('T')[0] });
+            setCustomAmounts({});
         } catch (err) {
             console.error(err);
         } finally {
@@ -58,7 +106,7 @@ function AddExpenseModal({ isOpen, onClose, friends, onSuccess }: {
         }
     };
 
-    const friendOptions = friends.map((f) => ({ value: f.id, label: f.name }));
+    const paidByOptions = everyone.map((p) => ({ value: p.id, label: p.label }));
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Add Expense" size="md">
@@ -76,7 +124,7 @@ function AddExpenseModal({ isOpen, onClose, friends, onSuccess }: {
                 <div className="grid grid-cols-2 gap-3">
                     <Input
                         id="expense-amount"
-                        label="Amount ($)"
+                        label="Amount (₹)"
                         type="number"
                         placeholder="0.00"
                         value={form.amount}
@@ -95,18 +143,26 @@ function AddExpenseModal({ isOpen, onClose, friends, onSuccess }: {
                     />
                 </div>
 
+                {/* Who paid? — includes "Me" by default */}
                 <Select
                     id="expense-paid-by"
                     label="Who Paid?"
-                    value={form.paidById}
+                    value={form.paidById || (owner?.id ?? '')}
                     onChange={(e) => set('paidById', e.target.value)}
-                    options={friendOptions}
-                    placeholder="Select friend"
+                    options={paidByOptions}
                     required
                 />
 
+                {/* Participants */}
                 <div>
-                    <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">Participants</p>
+                    <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-2">
+                        Split Between
+                        {form.splitType === 'EQUAL' && form.participants.length > 0 && (
+                            <span className="ml-2 text-text-muted normal-case font-normal">
+                                (₹{perPerson} each)
+                            </span>
+                        )}
+                    </p>
                     <div className="flex flex-wrap gap-2">
                         {friends.map((f) => (
                             <button
@@ -114,8 +170,8 @@ function AddExpenseModal({ isOpen, onClose, friends, onSuccess }: {
                                 type="button"
                                 onClick={() => toggleParticipant(f.id)}
                                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${form.participants.includes(f.id)
-                                        ? 'bg-accent-blue/20 border-accent-blue/30 text-accent-blue-light'
-                                        : 'bg-bg-surface border-border text-text-secondary hover:bg-bg-hover'
+                                    ? 'bg-accent-blue/20 border-accent-blue/30 text-accent-blue-light'
+                                    : 'bg-bg-surface border-border text-text-secondary hover:bg-bg-hover'
                                     }`}
                             >
                                 {f.name}
@@ -127,16 +183,53 @@ function AddExpenseModal({ isOpen, onClose, friends, onSuccess }: {
                     )}
                 </div>
 
+                {/* Split type */}
                 <Select
                     id="expense-split"
                     label="Split Type"
                     value={form.splitType}
-                    onChange={(e) => set('splitType', e.target.value as 'EQUAL' | 'CUSTOM')}
+                    onChange={(e) => {
+                        set('splitType', e.target.value as 'EQUAL' | 'CUSTOM');
+                        setCustomAmounts({});
+                    }}
                     options={[
                         { value: 'EQUAL', label: 'Equal Split' },
                         { value: 'CUSTOM', label: 'Custom Split' },
                     ]}
                 />
+
+                {/* Custom split — per-participant amount inputs */}
+                {form.splitType === 'CUSTOM' && form.participants.length > 0 && (
+                    <div className="p-3 rounded-xl bg-bg-surface border border-border space-y-2">
+                        <p className="text-xs font-medium text-text-secondary uppercase tracking-wide mb-1">
+                            Custom Amounts
+                            {totalAmount > 0 && (
+                                <span className={`ml-2 normal-case font-normal ${customValid ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    — ₹{customTotal.toFixed(2)} / ₹{totalAmount.toFixed(2)}
+                                    {!customValid && ' (must match total)'}
+                                </span>
+                            )}
+                        </p>
+                        {form.participants.map((uid) => {
+                            const label = everyone.find((p) => p.id === uid)?.label ?? uid;
+                            return (
+                                <div key={uid} className="flex items-center gap-3">
+                                    <span className="text-text-secondary text-sm w-28 truncate">{label}</span>
+                                    <Input
+                                        id={`custom-amt-${uid}`}
+                                        type="number"
+                                        placeholder="0.00"
+                                        value={customAmounts[uid] ?? ''}
+                                        onChange={(e) => setCustomAmounts((prev) => ({ ...prev, [uid]: e.target.value }))}
+                                        min="0.01"
+                                        step="0.01"
+                                        required
+                                    />
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
                 <div className="flex gap-2 justify-end pt-2">
                     <Button type="button" variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
@@ -145,7 +238,7 @@ function AddExpenseModal({ isOpen, onClose, friends, onSuccess }: {
                         size="sm"
                         loading={loading}
                         icon={<Plus size={14} />}
-                        disabled={form.participants.length === 0}
+                        disabled={form.participants.length === 0 || !customValid}
                     >
                         Add Expense
                     </Button>
@@ -160,19 +253,23 @@ function AddExpenseModal({ isOpen, onClose, friends, onSuccess }: {
 export default function ExpensesPage() {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [friends, setFriends] = useState<Friend[]>([]);
+    const [owner, setOwner] = useState<Friend | null>(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [addOpen, setAddOpen] = useState(false);
 
+    // Map ALL users (owner + friends) for display
     const friendMap: Record<string, Friend> = {};
+    if (owner) friendMap[owner.id] = owner;
     friends.forEach((f) => { friendMap[f.id] = f; });
 
     const loadData = async () => {
         setLoading(true);
         try {
-            const [e, f] = await Promise.all([getExpenses(), getFriends()]);
+            const [e, f, me] = await Promise.all([getExpenses(), getFriends(), getMe()]);
             setExpenses(e);
             setFriends(f);
+            setOwner(me);
         } catch (err) {
             console.error(err);
         } finally {
@@ -198,6 +295,13 @@ export default function ExpensesPage() {
         }
     };
 
+    // Label a user_id — owner always shown as "Me"
+    const labelFor = (userId: string) => {
+        const f = friendMap[userId];
+        if (!f) return 'Unknown';
+        return f.is_owner ? 'Me' : f.name;
+    };
+
     const columns = [
         {
             key: 'description',
@@ -210,33 +314,55 @@ export default function ExpensesPage() {
             key: 'amount',
             header: 'Amount',
             render: (ex: Expense) => (
-                <span className="font-mono font-semibold text-text-primary">${Number(ex.amount).toFixed(2)}</span>
+                <span className="font-mono font-semibold text-text-primary">₹{Number(ex.amount).toFixed(2)}</span>
             ),
         },
         {
             key: 'paidBy',
             header: 'Paid By',
-            render: (ex: Expense) => (
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-accent-purple/20 text-accent-purple-light flex items-center justify-center text-[10px] font-bold">
-                        {friendMap[ex.paidById]?.name?.charAt(0) ?? '?'}
+            render: (ex: Expense) => {
+                const name = labelFor(ex.paid_by_user_id);
+                const isMe = friendMap[ex.paid_by_user_id]?.is_owner;
+                return (
+                    <div className="flex items-center gap-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isMe ? 'bg-emerald-500/20 text-emerald-400' : 'bg-accent-purple/20 text-accent-purple-light'}`}>
+                            {name.charAt(0)}
+                        </div>
+                        <span className="text-text-secondary text-sm">{name}</span>
                     </div>
-                    <span className="text-text-secondary text-sm">{friendMap[ex.paidById]?.name ?? 'Unknown'}</span>
-                </div>
-            ),
+                );
+            },
+        },
+        {
+            key: 'myShare',
+            header: 'My Share',
+            render: (ex: Expense) => {
+                if (!owner) return <span className="text-text-muted text-sm">—</span>;
+                const myParticipant = ex.participants.find((p) => p.user_id === owner.id);
+                if (!myParticipant) return <span className="text-text-muted text-sm">—</span>;
+
+                const paidByMe = ex.paid_by_user_id === owner.id;
+                const share = Number(myParticipant.owed_amount);
+
+                // If I paid: I'm owed money (positive — show green)
+                // If friend paid: I owe them (negative — show red)
+                return paidByMe
+                    ? <span className="font-mono text-sm text-emerald-400">+₹{share.toFixed(2)}</span>
+                    : <span className="font-mono text-sm text-red-400">-₹{share.toFixed(2)}</span>;
+            },
         },
         {
             key: 'participants',
             header: 'Split With',
             render: (ex: Expense) => (
                 <div className="flex items-center -space-x-1.5">
-                    {ex.participants.slice(0, 4).map((pid) => (
+                    {ex.participants.slice(0, 4).map((p) => (
                         <div
-                            key={pid}
-                            title={friendMap[pid]?.name}
+                            key={p.user_id}
+                            title={labelFor(p.user_id)}
                             className="w-6 h-6 rounded-full bg-accent-cyan/20 text-accent-cyan border border-bg-card flex items-center justify-center text-[9px] font-bold"
                         >
-                            {friendMap[pid]?.name?.charAt(0) ?? '?'}
+                            {labelFor(p.user_id).charAt(0)}
                         </div>
                     ))}
                     {ex.participants.length > 4 && (
@@ -251,14 +377,14 @@ export default function ExpensesPage() {
             key: 'splitType',
             header: 'Split',
             render: (ex: Expense) => (
-                <span className={ex.splitType === 'EQUAL' ? 'badge-blue' : 'badge-purple'}>{ex.splitType}</span>
+                <span className={ex.split_type === 'EQUAL' ? 'badge-blue' : 'badge-purple'}>{ex.split_type}</span>
             ),
         },
         {
             key: 'date',
             header: 'Date',
             render: (ex: Expense) => (
-                <span className="text-text-muted text-sm">{new Date(ex.date).toLocaleDateString()}</span>
+                <span className="text-text-muted text-sm">{new Date(ex.expense_date).toLocaleDateString()}</span>
             ),
         },
         {
@@ -282,7 +408,7 @@ export default function ExpensesPage() {
         <div>
             <PageHeader
                 title="Expenses"
-                subtitle={`${expenses.length} expenses · $${totalAmount.toFixed(2)} total`}
+                subtitle={`${expenses.length} expenses · ₹${totalAmount.toFixed(2)} total`}
                 icon={<Receipt size={18} />}
                 actions={
                     <Button id="add-expense-btn" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
@@ -310,6 +436,7 @@ export default function ExpensesPage() {
             <AddExpenseModal
                 isOpen={addOpen}
                 onClose={() => setAddOpen(false)}
+                owner={owner}
                 friends={friends}
                 onSuccess={loadData}
             />

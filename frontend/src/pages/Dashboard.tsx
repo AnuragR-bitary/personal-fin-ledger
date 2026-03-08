@@ -1,24 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
-    TrendingUp, TrendingDown, Clock, Users,
-    ArrowUpRight, ArrowDownRight, LayoutDashboard,
+    TrendingUp, TrendingDown, Clock, Users, LayoutDashboard,
 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader';
 import StatCard from '../components/ui/StatCard';
-import { getDebts, getFriends } from '../services/api';
-import type { Debt, Friend } from '../types';
+import { getFriends, getMe } from '../services/friend.service';
+import { getBalances } from '../services/payment.service';
+import { getExpenses } from '../services/expense.service';
+import type { Friend, Balance, Expense } from '../types';
 
 export default function Dashboard() {
-    const [debts, setDebts] = useState<Debt[]>([]);
+    const [owner, setOwner] = useState<Friend | null>(null);
     const [friends, setFriends] = useState<Friend[]>([]);
+    const [balances, setBalances] = useState<Balance[]>([]);
+    const [expenses, setExpenses] = useState<Expense[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const load = async () => {
             try {
-                const [d, f] = await Promise.all([getDebts(), getFriends()]);
-                setDebts(d);
+                const [me, f, b, e] = await Promise.all([getMe(), getFriends(), getBalances(), getExpenses()]);
+                setOwner(me);
                 setFriends(f);
+                setBalances(b);
+                setExpenses(e);
             } catch (e) {
                 console.error(e);
             } finally {
@@ -28,15 +33,30 @@ export default function Dashboard() {
         load();
     }, []);
 
-    const friendMap: Record<string, Friend> = {};
-    friends.forEach((f) => { friendMap[f.id] = f; });
+    // Build a map of ALL users (owner + friends)
+    const userMap: Record<string, Friend> = useMemo(() => {
+        const map: Record<string, Friend> = {};
+        if (owner) map[owner.id] = owner;
+        friends.forEach((f) => { map[f.id] = f; });
+        return map;
+    }, [owner, friends]);
 
-    const pendingDebts = debts.filter((d) => d.status === 'PENDING');
-    const totalLent = pendingDebts.reduce((s, d) => s + Number(d.amount), 0);
-    const friendsWithDebt = new Set(pendingDebts.map((d) => d.debtorId)).size;
+    const labelFor = (userId: string) => {
+        const u = userMap[userId];
+        if (!u) return 'Unknown';
+        return u.is_owner ? 'Me' : u.name;
+    };
 
-    const recentDebts = [...debts]
-        .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+    // Only show balances for friends who actually have expenses
+    const activeBalances = useMemo(() => balances.filter((b) => b.total_owed > 0), [balances]);
+    const pendingBalances = useMemo(() => activeBalances.filter((b) => b.balance > 0), [activeBalances]);
+
+    // Derived stats from real balance data
+    const totalOutstanding = pendingBalances.reduce((s, b) => s + b.balance, 0);
+    const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
+
+    const recentExpenses = [...expenses]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
         .slice(0, 8);
 
     return (
@@ -50,29 +70,29 @@ export default function Dashboard() {
             {/* Stat Cards */}
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
                 <StatCard
-                    label="Total Lent"
-                    value={loading ? '—' : `$${totalLent.toFixed(2)}`}
+                    label="Total Outstanding"
+                    value={loading ? '—' : `₹${totalOutstanding.toFixed(2)}`}
                     icon={<TrendingUp size={18} />}
                     variant="blue"
-                    subtext="outstanding amount"
+                    subtext="owed to you"
                 />
                 <StatCard
-                    label="Total Borrowed"
-                    value="$0.00"
+                    label="Total Expenses"
+                    value={loading ? '—' : `₹${totalExpenses.toFixed(2)}`}
                     icon={<TrendingDown size={18} />}
                     variant="red"
-                    subtext="you owe others"
+                    subtext="recorded so far"
                 />
                 <StatCard
-                    label="Pending Debts"
-                    value={loading ? '—' : String(pendingDebts.length)}
+                    label="Expenses Count"
+                    value={loading ? '—' : String(expenses.length)}
                     icon={<Clock size={18} />}
                     variant="amber"
-                    subtext="awaiting settlement"
+                    subtext="total entries"
                 />
                 <StatCard
                     label="Active Friends"
-                    value={loading ? '—' : String(friendsWithDebt)}
+                    value={loading ? '—' : String(pendingBalances.length)}
                     icon={<Users size={18} />}
                     variant="green"
                     subtext="with pending balance"
@@ -81,12 +101,12 @@ export default function Dashboard() {
 
             {/* Two-column section */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                {/* Recent Activity */}
+                {/* Recent Expenses */}
                 <div className="xl:col-span-2">
                     <div className="glass-card">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-text-primary font-semibold text-sm">Recent Activity</h2>
-                            <span className="text-text-muted text-xs">{debts.length} total records</span>
+                            <h2 className="text-text-primary font-semibold text-sm">Recent Expenses</h2>
+                            <span className="text-text-muted text-xs">{expenses.length} total</span>
                         </div>
                         {loading ? (
                             <div className="space-y-3">
@@ -94,55 +114,49 @@ export default function Dashboard() {
                                     <div key={i} className="h-14 rounded-lg bg-bg-elevated animate-pulse" />
                                 ))}
                             </div>
-                        ) : recentDebts.length === 0 ? (
+                        ) : recentExpenses.length === 0 ? (
                             <div className="py-12 text-center text-text-muted">
                                 <p className="text-4xl mb-2">💸</p>
-                                <p className="text-sm">No activity yet. Add a debt to get started!</p>
+                                <p className="text-sm">No expenses yet. Add one to get started!</p>
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                {recentDebts.map((debt) => {
-                                    const creditor = friendMap[debt.creditorId]?.name ?? 'Unknown';
-                                    const debtor = friendMap[debt.debtorId]?.name ?? 'Unknown';
-                                    const isPending = debt.status === 'PENDING';
-                                    return (
-                                        <div
-                                            key={debt.id}
-                                            className="flex items-center gap-3 p-3 rounded-lg bg-bg-surface hover:bg-bg-hover transition-colors"
-                                        >
-                                            <div className={`p-2 rounded-lg flex-shrink-0 ${isPending ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'
-                                                }`}>
-                                                {isPending ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-text-primary text-sm font-medium truncate">{debt.description}</p>
-                                                <p className="text-text-muted text-xs">
-                                                    <span className="text-text-secondary">{debtor}</span> owes <span className="text-text-secondary">{creditor}</span>
-                                                </p>
-                                            </div>
-                                            <div className="text-right flex-shrink-0">
-                                                <p className="text-text-primary text-sm font-semibold font-mono">
-                                                    ${Number(debt.amount).toFixed(2)}
-                                                </p>
-                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${isPending ? 'badge-amber' : 'badge-success'
-                                                    }`}>
-                                                    {debt.status}
-                                                </span>
-                                            </div>
+                                {recentExpenses.map((expense) => (
+                                    <div
+                                        key={expense.id}
+                                        className="flex items-center gap-3 p-3 rounded-lg bg-bg-surface hover:bg-bg-hover transition-colors"
+                                    >
+                                        <div className="w-8 h-8 rounded-lg bg-accent-blue/15 text-accent-blue-light flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                            {expense.description.charAt(0).toUpperCase()}
                                         </div>
-                                    );
-                                })}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-text-primary text-sm font-medium truncate">{expense.description}</p>
+                                            <p className="text-text-muted text-xs">
+                                                Paid by <span className="text-text-secondary">{labelFor(expense.paid_by_user_id)}</span>
+                                                {' · '}{new Date(expense.expense_date).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <p className="text-text-primary text-sm font-semibold font-mono">
+                                                ₹{Number(expense.amount).toFixed(2)}
+                                            </p>
+                                            <span className={`text-[10px] font-medium ${expense.split_type === 'EQUAL' ? 'badge-blue' : 'badge-purple'}`}>
+                                                {expense.split_type}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
                 </div>
 
-                {/* Friends Summary */}
+                {/* Friends Balance summary — only outstanding balances */}
                 <div>
                     <div className="glass-card">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-text-primary font-semibold text-sm">Friends</h2>
-                            <span className="text-text-muted text-xs">{friends.length} total</span>
+                            <h2 className="text-text-primary font-semibold text-sm">Outstanding Balances</h2>
+                            <span className="text-text-muted text-xs">{pendingBalances.length} pending</span>
                         </div>
                         {loading ? (
                             <div className="space-y-3">
@@ -150,31 +164,26 @@ export default function Dashboard() {
                                     <div key={i} className="h-12 rounded-lg bg-bg-elevated animate-pulse" />
                                 ))}
                             </div>
-                        ) : friends.length === 0 ? (
-                            <p className="text-text-muted text-sm text-center py-8">No friends yet.</p>
+                        ) : pendingBalances.length === 0 ? (
+                            <div className="py-8 text-center text-text-muted">
+                                <p className="text-3xl mb-2">🎉</p>
+                                <p className="text-sm">All settled up! No pending balances.</p>
+                            </div>
                         ) : (
                             <div className="space-y-2">
-                                {friends.slice(0, 6).map((f) => {
-                                    const owes = pendingDebts
-                                        .filter((d) => d.debtorId === f.id)
-                                        .reduce((s, d) => s + Number(d.amount), 0);
-                                    return (
-                                        <div key={f.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-bg-hover transition-colors">
-                                            <div className="w-8 h-8 rounded-full bg-accent-blue/20 text-accent-blue-light flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                                {f.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-text-primary text-sm font-medium truncate">{f.name}</p>
-                                                {f.phone && <p className="text-text-muted text-xs truncate">{f.phone}</p>}
-                                            </div>
-                                            {owes > 0 && (
-                                                <span className="text-accent-red-light text-xs font-mono font-semibold">
-                                                    ${owes.toFixed(0)}
-                                                </span>
-                                            )}
+                                {pendingBalances.slice(0, 6).map((b) => (
+                                    <div key={b.user_id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-bg-hover transition-colors">
+                                        <div className="w-8 h-8 rounded-full bg-accent-blue/20 text-accent-blue-light flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                            {b.name.charAt(0).toUpperCase()}
                                         </div>
-                                    );
-                                })}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-text-primary text-sm font-medium truncate">{b.name}</p>
+                                        </div>
+                                        <span className="text-xs font-mono font-semibold text-emerald-400">
+                                            ₹{b.balance.toFixed(2)}
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>

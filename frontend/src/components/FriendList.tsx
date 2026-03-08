@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getFriends, createFriend } from '../services/api';
-import type { Friend } from '../services/api';
+import { getFriends, createFriend } from '../services/friend.service';
+import type { Friend } from '../types';
 import { UserPlus, User } from 'lucide-react';
 
 export default function FriendList() {

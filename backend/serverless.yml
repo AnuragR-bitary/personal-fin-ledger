@@ -12,26 +12,19 @@ provider:
     DB_NAME: ${env:DB_NAME, 'personal-fin-ledger'}
 
 plugins:
-  - serverless-plugin-typescript
   - serverless-offline
 
 functions:
-  createDebt:
-    handler: src/handlers/create-debt.handler
+  # ─── Owner ──────────────────────────────────────────────────────────────────
+  me:
+    handler: src/handlers/me.handler
     events:
       - http:
-          path: debts
-          method: post
-          cors: true
-
-  listDebts:
-    handler: src/handlers/list-debts.handler
-    events:
-      - http:
-          path: debts
+          path: me
           method: get
           cors: true
 
+  # ─── Friends ────────────────────────────────────────────────────────────────
   createFriend:
     handler: src/handlers/create-friend.handler
     events:
@@ -47,11 +40,66 @@ functions:
           path: friends
           method: get
           cors: true
+      - http:
+          path: friends/{id}
+          method: get
+          cors: true
 
-  recordRepayment:
+  updateFriend:
+    handler: src/handlers/update-friend.handler
+    events:
+      - http:
+          path: friends/{id}
+          method: put
+          cors: true
+
+  deleteFriend:
+    handler: src/handlers/delete-friend.handler
+    events:
+      - http:
+          path: friends/{id}
+          method: delete
+          cors: true
+
+  # ─── Expenses ───────────────────────────────────────────────────────────────
+  expenses:
+    handler: src/handlers/expense.handler
+    events:
+      - http:
+          path: expenses
+          method: get
+          cors: true
+      - http:
+          path: expenses
+          method: post
+          cors: true
+
+  deleteExpense:
+    handler: src/handlers/delete-expense.handler
+    events:
+      - http:
+          path: expenses/{id}
+          method: delete
+          cors: true
+
+  # ─── Payments ───────────────────────────────────────────────────────────────
+  payments:
     handler: src/handlers/record-repayment.handler
     events:
       - http:
-          path: repayments
+          path: payments
+          method: get
+          cors: true
+      - http:
+          path: payments
           method: post
+          cors: true
+
+  # ─── Balances ───────────────────────────────────────────────────────────────
+  balances:
+    handler: src/handlers/balances.handler
+    events:
+      - http:
+          path: balances
+          method: get
           cors: true

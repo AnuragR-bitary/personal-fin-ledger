@@ -1,4 +1,4 @@
-// ─── Friends ──────────────────────────────────────────────────────────────────
+// ─── Users / Friends ──────────────────────────────────────────────────────────
 
 export interface Friend {
     id: string;
@@ -25,12 +25,15 @@ export interface Expense {
     participants: ExpenseParticipant[];
 }
 
+// Incoming request shape for creating an expense
 export interface CreateExpenseInput {
     description: string;
     amount: number;
     paidByUserId: string;
     expenseDate: string;
     splitType: 'EQUAL' | 'CUSTOM';
+    // For EQUAL: just list of user IDs
+    // For CUSTOM: list of { userId, owedAmount }
     participants: { userId: string; owedAmount?: number }[];
 }
 
@@ -55,20 +58,9 @@ export interface CreatePaymentInput {
 // ─── Balances ─────────────────────────────────────────────────────────────────
 
 export interface Balance {
-    id: string;        // alias for user_id — required by Table component
     user_id: string;
     name: string;
     total_owed: number;
     total_paid: number;
     balance: number;
 }
-
-// ─── UI / Utility Types ───────────────────────────────────────────────────────
-
-export type NavItem = {
-    label: string;
-    path: string;
-    icon: React.ElementType;
-};
-
-export type StatCardVariant = 'blue' | 'green' | 'red' | 'amber';
